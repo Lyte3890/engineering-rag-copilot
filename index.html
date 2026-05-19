@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineering RAG Terminal</title>
+    <style>
+        :root {
+            --bg-main: #0d1117;
+            --bg-panel: #161b22;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --border: #30363d;
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        body {
+            font-family: var(--font-main); background-color: var(--bg-main);
+            color: var(--text-primary); margin: 0; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        .container {
+            width: 100%; max-width: 1000px; height: 90vh;
+            background-color: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: 8px; display: flex; flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5); overflow: hidden;
+        }
+
+        .header {
+            padding: 16px 24px; border-bottom: 1px solid var(--border);
+            background-color: #010409; display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-right { display: flex; gap: 10px; }
+
+        .header svg { fill: var(--text-secondary); width: 20px; height: 20px; }
+
+        .header h1 {
+            font-size: 14px; font-weight: 600; margin: 0;
+            letter-spacing: 1px; text-transform: uppercase;
+            color: var(--text-secondary); font-family: var(--font-mono);
+        }
+
+        .action-btn {
+            background: transparent; border: 1px solid var(--border);
+            color: var(--text-secondary); padding: 6px 12px; font-size: 12px;
+            border-radius: 4px; cursor: pointer; transition: all 0.2s; font-family: var(--font-mono);
+        }
+        .action-btn:hover { border-color: var(--text-primary); color: var(--text-primary); }
+        .action-btn.primary { border-color: var(--accent); color: var(--accent); }
+        .action-btn.primary:hover { background-color: rgba(88, 166, 255, 0.1); }
+
+        .chat-box {
+            flex: 1; padding: 24px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 24px;
+        }
+
+        .chat-box::-webkit-scrollbar { width: 10px; }
+        .chat-box::-webkit-scrollbar-track { background: var(--bg-panel); }
+        .chat-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg-panel); }
+        .chat-box::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+        .message { display: flex; flex-direction: column; max-width: 85%; }
+        .message.user-msg { align-self: flex-end; align-items: flex-end; }
+        .message.ai-msg { align-self: flex-start; }
+        .message.sys-msg { align-self: center; align-items: center; max-width: 95%; width: 100%;}
+
+        .msg-label {
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;
+            text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;
+        }
+
+        .msg-content { padding: 14px 18px; border-radius: 6px; font-size: 14px; line-height: 1.6; }
+        .user-msg .msg-content { background-color: var(--border); color: var(--text-primary); border-bottom-right-radius: 2px; }
+        .ai-msg .msg-content { background-color: transparent; border: 1px solid var(--border); border-top-left-radius: 2px; }
+        .sys-msg .msg-content { background-color: rgba(88, 166, 255, 0.05); border: 1px dashed var(--border); color: var(--accent); text-align: center; width: 100%; font-family: var(--font-mono);}
+
+        .sources-list { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .source-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; background-color: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.2); color: var(--accent);
+            text-decoration: none; border-radius: 4px;
+            font-family: var(--font-mono); font-size: 12px; transition: all 0.2s ease;
+        }
+
+        .source-link:hover { background-color: rgba(88, 166, 255, 0.2); border-color: var(--accent); }
+
+        .input-area {
+            padding: 16px 24px; border-top: 1px solid var(--border);
+            background-color: #010409; display: flex; gap: 12px;
+        }
+
+        input[type="text"] {
+            flex: 1; padding: 14px 16px; background-color: var(--bg-main);
+            border: 1px solid var(--border); color: var(--text-primary);
+            border-radius: 6px; font-size: 14px; font-family: var(--font-mono); outline: none;
+        }
+        input[type="text"]:focus { border-color: var(--accent); }
+
+        button.execute-btn {
+            padding: 0 24px; background-color: var(--text-primary);
+            color: var(--bg-main); border: none; border-radius: 6px;
+            cursor: pointer; font-weight: 600; font-size: 14px;
+        }
+        button.execute-btn:hover { opacity: 0.8; }
+        button.execute-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20,13H4V11H20V13M20,19H4V17H20V19M20,7H4V5H20V7M22,3H2C0.89,3 0,3.89 0,5V19C0,20.11 0.89,21 2,21H22C23.11,21 24,20.11 24,19V5C24,3.89 23.11,3 22,3Z" />
+                </svg>
+                <h1>Engineering Docs // RAG Copilot</h1>
+            </div>
+            <div class="header-right">
+                <input type="file" id="fileUpload" accept=".pdf" style="display: none;" onchange="handleFileUpload(event)">
+                <button class="action-btn" onclick="document.getElementById('fileUpload').click()">Upload PDF</button>
+                <button class="action-btn primary" onclick="syncStorage()">Sync Storage</button>
+                <button class="action-btn" onclick="clearHistory()">Clear Context</button>
+            </div>
+        </div>
+        
+        <div class="chat-box" id="chatBox">
+            <div class="message ai-msg">
+                <div class="msg-label">System</div>
+                <div class="msg-content">Local vector database connected.<br><br><i>Tip: Drop files into <b>docs_storage/</b> on your OS, then click <b>Sync Storage</b> (or type <b>/sync</b>) to batch process.</i></div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="queryInput" placeholder="> Enter engineering query or /sync..." autocomplete="off" onkeypress="handleKeyPress(event)">
+            <button id="sendBtn" class="execute-btn" onclick="askQuestion()">Execute</button>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const queryInput = document.getElementById('queryInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const fileUploadInput = document.getElementById('fileUpload');
+        
+        let sessionHistory = [];
+
+        function clearHistory() {
+            sessionHistory = [];
+            chatBox.innerHTML = `
+                <div class="message sys-msg">
+                    <div class="msg-content">[SYS] Context cleared. Memory reset.</div>
+                </div>`;
+        }
+
+        function appendMessage(text, type, sources = []) {
+            const msgDiv = document.createElement('div');
+            
+            if (type === 'user') {
+                msgDiv.className = 'message user-msg';
+                msgDiv.innerHTML = `<div class="msg-label">User</div><div class="msg-content">${text}</div>`;
+            } else if (type === 'sys') {
+                msgDiv.className = 'message sys-msg';
+                msgDiv.innerHTML = `<div class="msg-content">[SYS] ${text}</div>`;
+            } else {
+                msgDiv.className = 'message ai-msg';
+                let contentHTML = `<div class="msg-label">RAG Copilot</div><div class="msg-content">${text}`;
+                
+                if (sources && sources.length > 0) {
+                    let sourcesHTML = `<div class="sources-list">`;
+                    sources.forEach(src => {
+                        if (src.file !== "Unknown source") {
+                            // Відносний шлях для завантаження PDF
+                            const fileUrl = `/docs/${src.file}#page=${src.page}`;
+                            sourcesHTML += `
+                                <a href="${fileUrl}" target="_blank" class="source-link">
+                                    <svg style="width:12px; height:12px; fill:currentColor" viewBox="0 0 24 24"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13Z"/></svg>
+                                    ${src.file} : Page ${src.page}
+                                </a>`;
+                        }
+                    });
+                    sourcesHTML += `</div>`;
+                    contentHTML += sourcesHTML;
+                }
+                contentHTML += `</div>`;
+                msgDiv.innerHTML = contentHTML;
+            }
+
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = '';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            appendMessage(`Uploading and indexing: ${file.name}... Please wait.`, 'sys');
+
+            try {
+                // Відносний шлях
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Server error during upload');
+                }
+                
+                const data = await response.json();
+                appendMessage(`Success: ${data.message}`, 'sys');
+            } catch (error) {
+                appendMessage(`ERROR: ${error.message}`, 'sys');
+                console.error(error);
+            }
+        }
+
+        async function syncStorage() {
+            appendMessage(`Synchronizing with local docs_storage/ directory... Rebuilding vector index.`, 'sys');
+            try {
+                // Відносний шлях
+                const response = await fetch('/sync', { method: 'POST' });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Server error during sync');
+                }
+                const data = await response.json();
+                appendMessage(`Success: ${data.message}`, 'sys');
+            } catch (error) {
+                appendMessage(`ERROR: ${error.message}`, 'sys');
+                console.error(error);
+            }
+        }
+
+        async function askQuestion() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            queryInput.value = '';
+            queryInput.disabled = true;
+            sendBtn.disabled = true;
+            
+            appendMessage(query, 'user');
+
+            if (query === '/sync') {
+                await syncStorage();
+                queryInput.disabled = false;
+                sendBtn.disabled = false;
+                queryInput.focus();
+                return;
+            }
+
+            try {
+                // Відносний шлях
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        query: query,
+                        chat_history: sessionHistory 
+                    })
+                });
+
+                if (!response.ok) throw new Error('Server error');
+                
+                const data = await response.json();
+                appendMessage(data.answer, 'ai', data.sources);
+
+                sessionHistory.push({ role: "user", content: query });
+                sessionHistory.push({ role: "assistant", content: data.answer });
+                
+                if (sessionHistory.length > 6) {
+                    sessionHistory = sessionHistory.slice(sessionHistory.length - 6);
+                }
+
+            } catch (error) {
+                appendMessage("CRITICAL ERROR: Connection to API failed.", 'sys');
+                console.error(error);
+            } finally {
+                queryInput.disabled = false;
+                sendBtn.disabled = false;
+                queryInput.focus();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                askQuestion();
+            }
+        }
+    </script>
+</body>
+</html>

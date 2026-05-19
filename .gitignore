@@ -1,0 +1,15 @@
+cat << 'EOF' > .gitignore
+# Environments
+venv/
+env/
+.env
+
+# Database and Storage
+chroma_db/
+docs_storage/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+EOF
