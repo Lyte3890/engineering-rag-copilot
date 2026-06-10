@@ -44,15 +44,15 @@ async def ask_question(request: QueryRequest):
 
 @app.post("/upload")
 async def upload_and_process_pdf(file: UploadFile = File(...)):
-    if not file.filename.endswith('.pdf'):
+    if file.filename is None or not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    
+
     file_path = os.path.join(DOCS_DIR, file.filename)
-    
+
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         chunks_count = process_document(file_path)
         return {"message": f"Successfully uploaded and indexed '{file.filename}' ({chunks_count} chunks)."}
     except Exception as e:

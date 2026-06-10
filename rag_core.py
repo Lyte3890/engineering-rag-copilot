@@ -1,17 +1,6 @@
-import os
-import glob
-import shutil
-from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
-from langchain_groq import ChatGroq
-from langchain_classic.chains import create_retrieval_chain, create_history_aware_retriever
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
-
+from typing import Optional
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from pydantic import SecretStr
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -58,8 +47,8 @@ def sync_directory():
         
     return len(pdf_files), total_chunks
 
-def format_chat_history(history_list: list):
-    formatted_history = []
+def format_chat_history(history_list: list) -> list[BaseMessage]:
+    formatted_history: list[BaseMessage] = []
     for msg in history_list:
         if msg.get("role") == "user":
             formatted_history.append(HumanMessage(content=msg.get("content")))
@@ -67,7 +56,8 @@ def format_chat_history(history_list: list):
             formatted_history.append(AIMessage(content=msg.get("content")))
     return formatted_history
 
-def ask_engineering_question(query: str, chat_history: list = None):
+
+def ask_engineering_question(query: str, chat_history: Optional[list] = None):
     if not os.path.exists(CHROMA_PATH):
         return {"answer": "Database is empty. Please upload or sync documentation first.", "sources": []}
 
@@ -77,9 +67,14 @@ def ask_engineering_question(query: str, chat_history: list = None):
     formatted_history = format_chat_history(chat_history)
 
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
-    retriever = db.as_retriever(search_kwargs={"k": 5}) 
-    llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama-3.3-70b-versatile", temperature=0.1)
+    retriever = db.as_retriever(search_kwargs={"k": 5})
 
+    llm = ChatGroq(
+        api_key=SecretStr(str(GROQ_API_KEY)),
+        model="llama-3.3-70b-versatile",
+        temperature=0.1
+    )
+    # ... (решта коду функції залишається без змін)
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
