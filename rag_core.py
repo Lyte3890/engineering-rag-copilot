@@ -1,6 +1,22 @@
+import os
+import glob
+import shutil
 from typing import Optional
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from dotenv import load_dotenv
 from pydantic import SecretStr
+
+# LangChain Imports
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_groq import ChatGroq
+from langchain_classic.chains import create_retrieval_chain, create_history_aware_retriever
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+
+# Initialize environment
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -40,14 +56,15 @@ def sync_directory():
         return 0, 0
 
     reset_database()
-    
+
     total_chunks = 0
     for pdf in pdf_files:
         total_chunks += process_document(pdf)
-        
+
     return len(pdf_files), total_chunks
 
 def format_chat_history(history_list: list) -> list[BaseMessage]:
+    """Converts raw dictionary chat history into structured LangChain message objects."""
     formatted_history: list[BaseMessage] = []
     for msg in history_list:
         if msg.get("role") == "user":
@@ -56,8 +73,8 @@ def format_chat_history(history_list: list) -> list[BaseMessage]:
             formatted_history.append(AIMessage(content=msg.get("content")))
     return formatted_history
 
-
 def ask_engineering_question(query: str, chat_history: Optional[list] = None):
+    """Executes history-aware context retrieval and LLM generation for technical queries."""
     if not os.path.exists(CHROMA_PATH):
         return {"answer": "Database is empty. Please upload or sync documentation first.", "sources": []}
 
@@ -74,7 +91,7 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
         model="llama-3.3-70b-versatile",
         temperature=0.1
     )
-    # ... (решта коду функції залишається без змін)
+
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
@@ -82,13 +99,13 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
         "without the chat history. Do NOT answer the question, "
         "just reformulate it if needed and otherwise return it as is."
     )
-    
+
     contextualize_q_prompt = ChatPromptTemplate.from_messages([
         ("system", contextualize_q_system_prompt),
         MessagesPlaceholder("chat_history"),
         ("human", "{input}"),
     ])
-    
+
     history_aware_retriever = create_history_aware_retriever(
         llm, retriever, contextualize_q_prompt
     )
@@ -103,7 +120,7 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
         "4. Be precise and structured.\n\n"
         "Context: {context}"
     )
-    
+
     qa_prompt = ChatPromptTemplate.from_messages([
         ("system", qa_system_prompt),
         MessagesPlaceholder("chat_history"),
@@ -117,15 +134,15 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
         "input": query,
         "chat_history": formatted_history
     })
-    
+
     sources = []
     for doc in response["context"]:
         source_path = doc.metadata.get("source", "")
         file_name = os.path.basename(source_path) if source_path else "Unknown source"
-        
+
         raw_page = doc.metadata.get("page")
         page = int(raw_page) + 1 if raw_page is not None else "N/A"
-        
+
         sources.append({"file": file_name, "page": page})
 
     unique_sources = [dict(t) for t in {tuple(d.items()) for d in sources}]
