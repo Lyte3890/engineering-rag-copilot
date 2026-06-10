@@ -1,0 +1,13 @@
+{
+    "content": [
+        {
+            "name": "__pycache__"
+        },
+        {
+            "name": "venv"
+        },
+        {
+            "name": "README"
+        }
+    ]
+}

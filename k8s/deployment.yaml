@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-copilot-deployment
+  labels:
+    app: rag-copilot
+spec:
+  replicas: 2 # High availability: run 2 instances of your app
+  selector:
+    matchLabels:
+      app: rag-copilot
+  template:
+    metadata:
+      labels:
+        app: rag-copilot
+    spec:
+      containers:
+      - name: rag-copilot
+        image: your-dockerhub-username/rag-copilot:latest # Replace with your registry
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - secretRef:
+            name: rag-copilot-secrets # Where we will store GROQ_API_KEY
+        volumeMounts:
+        - name: docs-storage-volume
+          mountPath: /app/docs_storage
+        - name: chroma-db-volume
+          mountPath: /app/chroma_db
+      volumes:
+      - name: docs-storage-volume
+        persistentVolumeClaim:
+          claimName: rag-copilot-docs-pvc
+      - name: chroma-db-volume
+        persistentVolumeClaim:
+          claimName: rag-copilot-chroma-pvc
