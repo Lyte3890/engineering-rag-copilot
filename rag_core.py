@@ -1,4 +1,3 @@
-cat << 'EOF' > rag_core.py
 import os
 import glob
 import shutil
@@ -152,4 +151,3 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
         "answer": response["answer"],
         "sources": unique_sources
     }
-EOF
