@@ -30,5 +30,63 @@ Enterprise-grade, cloud-native History-Aware Retrieval-Augmented Generation (RAG
 
 ### Prerequisites
 For all deployment methods, a `.env` file is required in the root directory containing your LLM provider key:
-```env
+```
 GROQ_API_KEY=your_api_key_here
+```
+Option A: Containerized Deployment (Docker) - Recommended for Testing
+The fastest way to spin up the isolated environment without modifying the host OS.
+
+Build the Docker image
+```
+docker build -t engineering-rag-copilot:latest .
+```
+Run the container (exposing port 8000 and injecting the .env file)
+```
+docker run -d \
+  --name rag-copilot-instance \
+  -p 8000:8000 \
+  --env-file .env \
+  -v $(pwd)/docs_storage:/app/docs_storage \
+  -v $(pwd)/chroma_db:/app/chroma_db \
+  engineering-rag-copilot:latest
+```
+Option B: Enterprise Orchestration (Kubernetes)
+For high-availability production environments. Manifests are located in the k8s/ directory.
+
+Ensure your Kubernetes cluster (e.g., Minikube, EKS, GKE) is running.
+
+Create the required secret for the API key
+```
+kubectl create secret generic rag-copilot-secrets --from-literal=GROQ_API_KEY=your_api_key_here
+```
+Apply the infrastructure manifests
+```
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+Option C: Cloud Provisioning (Terraform)
+To provision the underlying AWS EKS cluster infrastructure before deploying K8s manifests.
+```
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+Option D: Bare-Metal Local Development
+For active codebase development and debugging.
+```
+# 1. Run the initialization script to setup venv and dependencies
+./install.sh
+
+# 2. Activate environment
+source venv/bin/activate
+
+# 3. Start the Uvicorn server
+python api.py
+```
+Security & Quality Assurance
+This repository enforces strict code quality via GitHub Actions. Every push to the ```main``` branch triggers:
+
+```flake8``` for PEP-8 compliance and syntax validation.
+
+```mypy``` for strict static type checking across FastAPI routes and LangChain modules.
