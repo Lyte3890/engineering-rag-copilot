@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-copilot-service
+spec:
+  selector:
+    app: rag-copilot
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: LoadBalancer # For cloud environments (AWS/GCP) to expose externally
