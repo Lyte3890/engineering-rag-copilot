@@ -45,8 +45,8 @@ htmlcov/
 chroma_db/
 
 # Technical documentation storage (runtime upload directory)
-docs_storage/*.pdf
-!docs_storage/.gitkeep
+#docs_storage/*.pdf
+ !docs_storage/.gitkeep
 
 # IDE and OS specific files
 .idea/
