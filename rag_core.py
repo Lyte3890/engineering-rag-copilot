@@ -20,8 +20,9 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Якщо ключ не знайдено, викидаємо помилку з більш зрозумілим текстом
 if not GROQ_API_KEY:
-    raise ValueError("CRITICAL ERROR: GROQ_API_KEY not found in .env file")
+    raise ValueError("CRITICAL ERROR: GROQ_API_KEY not found in environment variables!")
 
 embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
 CHROMA_PATH = "chroma_db"
