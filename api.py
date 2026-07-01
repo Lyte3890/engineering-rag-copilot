@@ -1,3 +1,4 @@
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -26,14 +27,7 @@ class QueryRequest(BaseModel):
 
 class ProcessRequest(BaseModel):
     file_path: str
-
-# НОВИЙ ЕНДПОІНТ: Віддає веб-інтерфейс
-@app.get("/")
-async def serve_frontend():
-    if not os.path.exists("index.html"):
-        raise HTTPException(status_code=404, detail="index.html not found on server.")
-    return FileResponse("index.html")
-
+    
 @app.post("/ask")
 async def ask_question(request: QueryRequest):
     try:
@@ -65,6 +59,57 @@ async def sync_storage_directory():
         return {"message": f"Storage synchronized. Indexed {files_count} files ({chunks_count} chunks total)."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat")
+async def chat_endpoint(
+    query: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    response_text = ""
+    sources_list = []
+
+    # 1. Обробка файлу (якщо користувач його прикріпив)
+    if file:
+        if not file.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+        file_path = os.path.join(DOCS_DIR, file.filename)
+        try:
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            # Використовуємо твою існуючу функцію з rag_core
+            chunks_count = process_document(file_path)
+            response_text += f"✅ File '{file.filename}' processed & vectorized ({chunks_count} chunks).\n\n"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
+
+    # 2. Обробка текстового запиту (якщо користувач його написав)
+    if query:
+        try:
+            # Викликаємо твою RAG функцію
+            rag_result = ask_engineering_question(query, [])
+            
+            # Адаптуємо результат під формат React
+            if isinstance(rag_result, dict):
+                response_text += rag_result.get("answer", "")
+                sources_list = rag_result.get("sources", [])
+            else:
+                # Якщо функція повертає просто строку
+                response_text += str(rag_result)
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"RAG query error: {str(e)}")
+
+    # 3. Перевірка на порожній запит
+    if not query and not file:
+        raise HTTPException(status_code=400, detail="Empty request: provide text or PDF.")
+
+    # 4. Повертаємо JSON у тому форматі, який очікує React-фронтенд
+    return {
+        "text": response_text.strip(),
+        "sources": sources_list
+    }    
 
 if __name__ == "__main__":
     import uvicorn
