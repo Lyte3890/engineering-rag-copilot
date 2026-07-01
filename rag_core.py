@@ -93,12 +93,11 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None, mo
 
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
     
-    # Використовуємо відсікання за порогом схожості замість жорсткого k=5
     retriever = db.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={
-            "k": 5,                  # Максимальна кількість шматків
-            "score_threshold": 0.25  # Поріг релевантності (зазвичай від 0 до 1)
+            "k": 5,                  
+            "score_threshold": 0.15  
         }
     )
 
