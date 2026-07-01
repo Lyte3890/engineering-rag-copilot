@@ -71,7 +71,7 @@ async def chat_endpoint(
     response_text = ""
     sources_list = []
 
-    # 1. Обробка файлу
+    # 1. Process File
     if file:
         if not file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -86,37 +86,38 @@ async def chat_endpoint(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
 
-    # 2. Обробка запиту
+    # 2. Process Query
     if query:
         try:
-        
             rag_result = ask_engineering_question(query, [])
             
             if isinstance(rag_result, dict):
                 response_text += rag_result.get("answer", "")
                 raw_sources = rag_result.get("sources", [])
                 
-                # 🛠️ ЗАЛІЗОБЕТОННИЙ ПАРСИНГ ДЖЕРЕЛ
+                # --- BULLETPROOF METADATA EXTRACTION ---
                 for src in raw_sources:
                     doc_name = "unknown.pdf"
                     page_num = "1"
                     
-                    # Якщо джерело - це словник (Dictionary)
-                    if isinstance(src, dict):
-                        # Шукаємо шлях до файлу під різними можливими ключами
-                        raw_path = src.get("source", src.get("file_name", src.get("document_name", "")))
-                        page_num = src.get("page", src.get("page_number", "1"))
+                    # Case A: LangChain Document object
+                    if hasattr(src, "metadata") and isinstance(src.metadata, dict):
+                        meta = src.metadata
+                        # Checking all possible keys LangChain might use
+                        raw_path = meta.get("source", meta.get("file_path", meta.get("file", "")))
+                        page_num = meta.get("page", meta.get("page_label", meta.get("page_number", "1")))
                         if raw_path:
-                            doc_name = os.path.basename(raw_path) # Забираємо лише назву файлу, відкидаючи довгий шлях (напр. /app/docs/...)
+                            doc_name = os.path.basename(str(raw_path))
                             
-                    # Якщо джерело - це об'єкт LangChain (Document)
-                    elif hasattr(src, "metadata"):
-                        raw_path = src.metadata.get("source", "")
-                        page_num = src.metadata.get("page", "1")
-                        if raw_path:
-                            doc_name = os.path.basename(raw_path)
+                    # Case B: Dictionary object
+                    elif isinstance(src, dict):
+                        meta = src.get("metadata", src)
+                        if isinstance(meta, dict):
+                            raw_path = meta.get("source", meta.get("file_path", meta.get("document_name", "")))
+                            page_num = meta.get("page", meta.get("page_label", "1"))
+                            if raw_path:
+                                doc_name = os.path.basename(str(raw_path))
                     
-                    # Формуємо чистий формат для фронтенду
                     sources_list.append({
                         "doc": doc_name,
                         "page": str(page_num)
