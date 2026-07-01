@@ -60,12 +60,80 @@ async def sync_storage_directory():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+import os
+
 @app.post("/api/chat")
 async def chat_endpoint(
     query: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    model: str = Form("llama3-70b-8192") # <--- Додаємо прийом моделі
+    model: str = Form("llama3-70b-8192")
 ):
+    response_text = ""
+    sources_list = []
+
+    # 1. Обробка файлу
+    if file:
+        if not file.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+        file_path = os.path.join(DOCS_DIR, file.filename)
+        try:
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            chunks_count = process_document(file_path)
+            response_text += f"✅ File '{file.filename}' processed & vectorized ({chunks_count} chunks).\n\n"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
+
+    # 2. Обробка запиту
+    if query:
+        try:
+        
+            rag_result = ask_engineering_question(query, [])
+            
+            if isinstance(rag_result, dict):
+                response_text += rag_result.get("answer", "")
+                raw_sources = rag_result.get("sources", [])
+                
+                # 🛠️ ЗАЛІЗОБЕТОННИЙ ПАРСИНГ ДЖЕРЕЛ
+                for src in raw_sources:
+                    doc_name = "unknown.pdf"
+                    page_num = "1"
+                    
+                    # Якщо джерело - це словник (Dictionary)
+                    if isinstance(src, dict):
+                        # Шукаємо шлях до файлу під різними можливими ключами
+                        raw_path = src.get("source", src.get("file_name", src.get("document_name", "")))
+                        page_num = src.get("page", src.get("page_number", "1"))
+                        if raw_path:
+                            doc_name = os.path.basename(raw_path) # Забираємо лише назву файлу, відкидаючи довгий шлях (напр. /app/docs/...)
+                            
+                    # Якщо джерело - це об'єкт LangChain (Document)
+                    elif hasattr(src, "metadata"):
+                        raw_path = src.metadata.get("source", "")
+                        page_num = src.metadata.get("page", "1")
+                        if raw_path:
+                            doc_name = os.path.basename(raw_path)
+                    
+                    # Формуємо чистий формат для фронтенду
+                    sources_list.append({
+                        "doc": doc_name,
+                        "page": str(page_num)
+                    })
+            else:
+                response_text += str(rag_result)
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"RAG query error: {str(e)}")
+
+    if not query and not file:
+        raise HTTPException(status_code=400, detail="Empty request: provide text or PDF.")
+
+    return {
+        "text": response_text.strip(),
+        "sources": sources_list
+    }
     response_text = ""
     sources_list = []
 
