@@ -27,7 +27,7 @@ class QueryRequest(BaseModel):
 
 class ProcessRequest(BaseModel):
     file_path: str
-    
+
 @app.post("/ask")
 async def ask_question(request: QueryRequest):
     try:
@@ -63,7 +63,8 @@ async def sync_storage_directory():
 @app.post("/api/chat")
 async def chat_endpoint(
     query: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
+    model: str = Form("llama3-70b-8192") # <--- Додаємо прийом моделі
 ):
     response_text = ""
     sources_list = []
