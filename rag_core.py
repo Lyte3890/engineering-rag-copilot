@@ -16,29 +16,36 @@ from langchain_classic.chains.combine_documents import create_stuff_documents_ch
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
-# Initialize environment
+# Initialize environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Якщо ключ не знайдено, викидаємо помилку з більш зрозумілим текстом
 if not GROQ_API_KEY:
-    raise ValueError("CRITICAL ERROR: GROQ_API_KEY not found in environment variables!")
+    raise ValueError("CRITICAL ERROR: GROQ_API_KEY not found in environment variables.")
 
+# Initialize embeddings and storage paths
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 CHROMA_PATH = "chroma_db"
 DOCS_DIR = "docs_storage"
 
 def reset_database():
-    """Hard reset of the vector database to prevent chunk duplication."""
+    """Performs a hard reset of the vector database to prevent chunk duplication."""
     if os.path.exists(CHROMA_PATH):
         print("[*] Wiping existing vector database...")
         shutil.rmtree(CHROMA_PATH)
 
 def process_document(pdf_path: str):
-    """Parses a single PDF and appends to the vector database."""
+    """Parses a single PDF, normalizes metadata, and appends to the vector database."""
     print(f"[*] Loading document: {pdf_path}")
     loader = PyPDFLoader(pdf_path)
     documents = loader.load()
+
+    # Force inject clean filename into metadata to ensure reliable frontend mapping
+    filename = os.path.basename(pdf_path)
+    for doc in documents:
+        if not hasattr(doc, 'metadata') or doc.metadata is None:
+            doc.metadata = {}
+        doc.metadata["source"] = filename
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_documents(documents)
@@ -74,8 +81,8 @@ def format_chat_history(history_list: list) -> list[BaseMessage]:
             formatted_history.append(AIMessage(content=msg.get("content")))
     return formatted_history
 
-def ask_engineering_question(query: str, chat_history: Optional[list] = None):
-    """Executes history-aware context retrieval and LLM generation for technical queries."""
+def ask_engineering_question(query: str, chat_history: Optional[list] = None, model_name: str = "llama3-70b-8192"):
+    """Executes history-aware context retrieval and LLM generation."""
     if not os.path.exists(CHROMA_PATH):
         return {"answer": "Database is empty. Please upload or sync documentation first.", "sources": []}
 
@@ -87,9 +94,10 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
     retriever = db.as_retriever(search_kwargs={"k": 5})
 
+    # Dynamically inject the model selected by the user via the frontend dropdown
     llm = ChatGroq(
         api_key=SecretStr(str(GROQ_API_KEY)),
-        model="llama-3.3-70b-versatile",
+        model=model_name,
         temperature=0.1
     )
 
@@ -139,13 +147,15 @@ def ask_engineering_question(query: str, chat_history: Optional[list] = None):
     sources = []
     for doc in response["context"]:
         source_path = doc.metadata.get("source", "")
-        file_name = os.path.basename(source_path) if source_path else "Unknown source"
+        file_name = os.path.basename(source_path) if source_path else "unknown.pdf"
 
         raw_page = doc.metadata.get("page")
-        page = int(raw_page) + 1 if raw_page is not None else "N/A"
+        page = int(raw_page) + 1 if raw_page is not None else "1"
 
-        sources.append({"file": file_name, "page": page})
+        # Use 'doc' instead of 'file' to match the frontend parser expectations
+        sources.append({"doc": file_name, "page": str(page)})
 
+    # Remove duplicate source entries
     unique_sources = [dict(t) for t in {tuple(d.items()) for d in sources}]
 
     return {
