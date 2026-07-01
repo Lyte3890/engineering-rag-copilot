@@ -66,12 +66,11 @@ import os
 async def chat_endpoint(
     query: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    model: str = Form("llama3-70b-8192")
+    model: str = Form("llama-3.3-70b-versatile") # <-- Змінили дефолтну модель
 ):
     response_text = ""
     sources_list = []
 
-    # 1. Process File
     if file:
         if not file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -86,30 +85,24 @@ async def chat_endpoint(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
 
-    # 2. Process Query
     if query:
         try:
-            rag_result = ask_engineering_question(query, [])
+            rag_result = ask_engineering_question(query, [], model_name=model)
             
             if isinstance(rag_result, dict):
                 response_text += rag_result.get("answer", "")
                 raw_sources = rag_result.get("sources", [])
                 
-                # --- BULLETPROOF METADATA EXTRACTION ---
                 for src in raw_sources:
                     doc_name = "unknown.pdf"
                     page_num = "1"
                     
-                    # Case A: LangChain Document object
                     if hasattr(src, "metadata") and isinstance(src.metadata, dict):
                         meta = src.metadata
-                        # Checking all possible keys LangChain might use
                         raw_path = meta.get("source", meta.get("file_path", meta.get("file", "")))
                         page_num = meta.get("page", meta.get("page_label", meta.get("page_number", "1")))
                         if raw_path:
                             doc_name = os.path.basename(str(raw_path))
-                            
-                    # Case B: Dictionary object
                     elif isinstance(src, dict):
                         meta = src.get("metadata", src)
                         if isinstance(meta, dict):
@@ -118,15 +111,13 @@ async def chat_endpoint(
                             if raw_path:
                                 doc_name = os.path.basename(str(raw_path))
                     
-                    sources_list.append({
-                        "doc": doc_name,
-                        "page": str(page_num)
-                    })
+                    sources_list.append({"doc": doc_name, "page": str(page_num)})
             else:
                 response_text += str(rag_result)
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"RAG query error: {str(e)}")
+            print(f"RAG Error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"API Error: {str(e)}")
 
     if not query and not file:
         raise HTTPException(status_code=400, detail="Empty request: provide text or PDF.")

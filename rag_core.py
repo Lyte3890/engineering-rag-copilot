@@ -81,26 +81,25 @@ def format_chat_history(history_list: list) -> list[BaseMessage]:
             formatted_history.append(AIMessage(content=msg.get("content")))
     return formatted_history
 
-def ask_engineering_question(query: str, chat_history: Optional[list] = None, model_name: str = "llama3-70b-8192"):
+def ask_engineering_question(query: str, chat_history: Optional[list] = None, model_name: str = "llama-3.3-70b-versatile"):
     """Executes history-aware context retrieval and LLM generation."""
+    
     if not os.path.exists(CHROMA_PATH):
         return {"answer": "Database is empty. Please upload or sync documentation first.", "sources": []}
 
     if chat_history is None:
         chat_history = []
-
     formatted_history = format_chat_history(chat_history)
 
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
     retriever = db.as_retriever(search_kwargs={"k": 5})
 
-    # Dynamically inject the model selected by the user via the frontend dropdown
     llm = ChatGroq(
         api_key=SecretStr(str(GROQ_API_KEY)),
         model=model_name,
         temperature=0.1
     )
-
+    
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
